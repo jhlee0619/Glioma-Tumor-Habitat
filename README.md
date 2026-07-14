@@ -1,9 +1,11 @@
-# Perfusion Habitat Analysis for Diffuse Glioma — Anonymous Code Repository
+# Perfusion Habitat Analysis for Diffuse Glioma
 
-Accompanies the Cell Reports Medicine manuscript **"Perfusion-based Habitat
-Analysis for Visualization and Quantification of Hemodynamic Heterogeneity
-in Diffuse Glioma."** The identifiers of the authors and their institution
-have been removed from this repository (see §5 below).
+[![DOI](https://zenodo.org/badge/891887348.svg)](https://doi.org/10.5281/zenodo.21350691)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Public code, trained weights, and reproduction pipeline accompanying the manuscript **"Perfusion-based Habitat Analysis for Visualization and Quantification of Hemodynamic Heterogeneity in Diffuse Glioma"** (submitted to Cell Reports Medicine).
+
+**Citation**: this release is archived at Zenodo with version DOI [`10.5281/zenodo.21350691`](https://doi.org/10.5281/zenodo.21350691). The concept DOI [`10.5281/zenodo.21350692`](https://doi.org/10.5281/zenodo.21350692) always resolves to the latest release.
 
 The materials here let a reviewer
 
@@ -167,37 +169,6 @@ subgroup statistics that reproduce Table 2 are provided at
 `analysis/data/summary_statistics.csv`. See the manuscript's Resource
 Availability section for the full statement.
 
-## 5. Anonymization
-
-Author, institutional, contact, IRB, funding, and patient identifiers have
-been removed from every file. Reviewers can verify with:
-
-```bash
-grep -rEi "Junhyeok|Minseo|Ho Kang|Kyu Sung|K\.S\.C\.|kyuchoi|ent1127" .
-grep -rEi "SNUH|Seoul National|Bundang|Healthcare AI Research" .
-grep -rE "2212-077-1385|RS-2023-|RS-2024-|04-2024-|04-2025-" .
-grep -rE "\+82-10-5042-7247|\+82-2-2072-1161" .
-grep -rE "/data/jhlee|/home/jhlee" .
-grep -rE "14472109|55726573|19745073" .
-```
-
-All commands return no matches (the identifiers listed in this README §5
-itself are documentation of what was removed; they are the only exception
-and are intentional).
-
-Redaction categories: four author names (co-first authors and
-corresponding author); five participating-institution names; corresponding
-author's two email addresses, two phone numbers, credentials, and postal
-address; IRB approval number; four funding grant identifiers; absolute
-filesystem paths and Linux username; three hard-coded patient identifiers;
-`[GitHub]` URL placeholder in the Code Availability paragraph; decompyle3
-header comments in restored bytecode files.
-
-The manuscript, cover letter, and Editorial Manager supplementary documents
-are submitted to Cell Reports Medicine with real author identifiers
-(single-blind review); only this code repository, hosted at
-anonymous.4open.science, is anonymized.
-
-## 6. License
+## 5. License
 
 MIT — see `LICENSE`.
