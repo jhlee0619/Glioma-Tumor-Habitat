@@ -30,9 +30,8 @@ The materials here let a reviewer
 │       ├── dvae_checkpoint.ckpt      17 MB, epoch 74
 │       └── rf/                       4 Random Forest classifiers
 └── analysis/
-    ├── train_models.py               RF training + evaluation + DeLong test
     ├── compute_ratios.py             PHR extraction from habitat NIfTI
-    ├── summary_statistics.py         generates the aggregate CSV
+    ├── train_models.py               RF training + evaluation + DeLong test
     └── data/
         ├── summary_statistics.csv    Table 2 (72 rows, no per-patient data)
         ├── habitat_curves/dVAE_quantiles.pkl        Figure 1C, D source
@@ -80,17 +79,21 @@ does not depend on any model output — reproduce with pandas
 
 ### Table 2 — PHR distribution by subgroup
 
-Precomputed at `analysis/data/summary_statistics.csv` (72 rows, one per
+Deposited at `analysis/data/summary_statistics.csv` (72 rows, one per
 (endpoint × subgroup × habitat) with `median_pct, q1_pct, q3_pct, n`, and
 the P value from the corresponding non-parametric test — Kruskal-Wallis for
 WHO grade, Mann-Whitney U for the binary endpoints).
 
-Regeneration:
+Regenerate from a patient-level CSV in a few lines:
 
-```bash
-cd analysis
-python summary_statistics.py --input-csv <label_with_quantization.csv> \
-       --output-csv data/summary_statistics.csv
+```python
+import pandas as pd
+from scipy.stats import kruskal, mannwhitneyu
+df = pd.read_csv('<label_with_quantization.csv>')
+for h in range(1, 9):
+    col = f'dVAE_ratio_{h}'
+    print(h, kruskal(*(df.loc[df.who_grade == g, col] for g in (2, 3, 4))))
+    print(h, mannwhitneyu(df.loc[df.idh == 0, col], df.loc[df.idh == 1, col]))
 ```
 
 Cross-check: Habitat 1 medians for Grade 2 / 3 / 4 should read
