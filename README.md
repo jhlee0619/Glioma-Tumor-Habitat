@@ -3,174 +3,89 @@
 [![DOI](https://zenodo.org/badge/891887348.svg)](https://doi.org/10.5281/zenodo.21350691)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Public code, trained weights, and reproduction pipeline accompanying the manuscript **"Perfusion-based Habitat Analysis for Visualization and Quantification of Hemodynamic Heterogeneity in Diffuse Glioma"** (submitted to Cell Reports Medicine).
+Trained models and inference pipeline accompanying the manuscript **"Perfusion-based Habitat Analysis for Visualization and Quantification of Hemodynamic Heterogeneity in Diffuse Glioma"** (submitted to Cell Reports Medicine).
 
-**Citation**: this release is archived at Zenodo with version DOI [`10.5281/zenodo.21350691`](https://doi.org/10.5281/zenodo.21350691). The concept DOI [`10.5281/zenodo.21350692`](https://doi.org/10.5281/zenodo.21350692) always resolves to the latest release.
+The materials here let a user apply the trained discrete variational autoencoder (dVAE) and the four Random Forest classifiers to their own DSC perfusion MRI, producing a voxel-wise habitat map, an 8-element Perfusion Habitat Ratio (PHR) vector, and probability outputs for WHO grade, IDH mutation, 1p/19q codeletion, and Ki-67 index.
 
-The materials here let a reviewer
-
-1. reload the trained discrete variational autoencoder (dVAE) and the four
-   Random Forest classifiers,
-2. reproduce Tables 2 and 3 from a user-supplied patient-level CSV, and
-3. inspect the aggregate subgroup statistics that underlie Table 2 and the
-   habitat curves shown in Figures 1A–D.
+**Citation** — this release is archived on Zenodo with version DOI [`10.5281/zenodo.21350691`](https://doi.org/10.5281/zenodo.21350691). The concept DOI [`10.5281/zenodo.21350692`](https://doi.org/10.5281/zenodo.21350692) always resolves to the latest release.
 
 ## 1. Layout
 
 ```
-├── README.md              this file
-├── LICENSE                MIT
-├── requirements.txt       pip dependencies
+├── README.md                          this file
+├── LICENSE                            MIT
+├── requirements.txt                   pip dependencies
 ├── model/
-│   ├── configs/vqgan_sep.yaml       architecture used to train the checkpoint
-│   ├── taming/                       dVAE source (encoder/decoder, VQ, dataset)
-│   ├── encode.py                     whole-cohort inference
-│   ├── project_utils.py              instantiate_from_config helper
+│   ├── configs/vqgan_sep.yaml         dVAE architecture used to train the checkpoint
+│   ├── taming/                        dVAE source (encoder / decoder / vector quantizer)
+│   ├── encode.py                      voxel-wise inference; writes habitat NIfTI
+│   ├── project_utils.py               instantiate_from_config helper
 │   └── weights/
-│       ├── dvae_checkpoint.ckpt      17 MB, epoch 74
-│       └── rf/                       4 Random Forest classifiers
+│       ├── dvae_checkpoint.ckpt       17 MB, trained dVAE (epoch 74)
+│       └── rf/                        four Random Forest classifiers
 └── analysis/
-    ├── compute_ratios.py             PHR extraction from habitat NIfTI
-    ├── train_models.py               RF training + evaluation + DeLong test
-    └── data/
-        ├── summary_statistics.csv    Table 2 (72 rows, no per-patient data)
-        ├── habitat_curves/dVAE_quantiles.pkl        Figure 1C, D source
-        └── reference_tissue/*.pkl                    Figure 1A, B source
+    └── predict.py                     habitat NIfTI + tumor mask → PHR → four endpoint probabilities
 ```
 
-## 2. Quick start
+## 2. Setup
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
-
-# Reload the deposited dVAE and run a forward pass.
-python -c "
-import sys; sys.path.insert(0, 'model')
-import torch
-from omegaconf import OmegaConf
-from project_utils import instantiate_from_config
-cfg = OmegaConf.load('model/configs/vqgan_sep.yaml')
-cfg.model.params.sane_index_shape = True
-m = instantiate_from_config(cfg.model)
-sd = torch.load('model/weights/dvae_checkpoint.ckpt', map_location='cpu',
-                weights_only=False)['state_dict']
-m.load_state_dict(sd, strict=False)
-m.eval()
-with torch.no_grad():
-    _, _, info = m.encode(torch.rand(4, 1, 60))
-print('habitat codes:', info[2].tolist())
-"
-
-# Reproduce Table 3 (needs the patient-level CSV, IRB-restricted).
-cd analysis
-python train_models.py --input-csv <label_with_quantization.csv> \
-       --model-dir ./trained_rf --output-dir ./reports
 ```
 
-## 3. Reproducing tables and figures
+Tested with Python 3.10–3.13 on Linux. GPU is optional; the deposited checkpoint runs on CPU for single-patient inference.
 
-### Table 1 — Patient characteristics
+## 3. Inference pipeline
 
-Aggregates demographic and pathologic columns of the source clinical CSV
-(`patient_id, age, sex, who_grade, idh, _1p19q, ki_67, kps, eor, mgmt`). It
-does not depend on any model output — reproduce with pandas
-`groupby("phase").describe()`.
+Given a preprocessed DSC 4D NIfTI (99.5th-percentile-normalised voxel time-series within a tumor mask) and a binary tumor mask NIfTI, the two steps below produce the habitat map, the PHR vector, and the four endpoint probabilities.
 
-### Table 2 — PHR distribution by subgroup
-
-Deposited at `analysis/data/summary_statistics.csv` (72 rows, one per
-(endpoint × subgroup × habitat) with `median_pct, q1_pct, q3_pct, n`, and
-the P value from the corresponding non-parametric test — Kruskal-Wallis for
-WHO grade, Mann-Whitney U for the binary endpoints).
-
-Regenerate from a patient-level CSV in a few lines:
-
-```python
-import pandas as pd
-from scipy.stats import kruskal, mannwhitneyu
-df = pd.read_csv('<label_with_quantization.csv>')
-for h in range(1, 9):
-    col = f'dVAE_ratio_{h}'
-    print(h, kruskal(*(df.loc[df.who_grade == g, col] for g in (2, 3, 4))))
-    print(h, mannwhitneyu(df.loc[df.idh == 0, col], df.loc[df.idh == 1, col]))
-```
-
-Cross-check: Habitat 1 medians for Grade 2 / 3 / 4 should read
-`0.15 / 0.44 / 2.21`, all with `P < .001`.
-
-### Table 3 — Discriminatory performance
-
-```bash
-cd analysis
-python train_models.py --input-csv <label_with_quantization.csv> \
-       --model-dir ./trained_rf --output-dir ./reports
-```
-
-Outputs per-endpoint AUC (5000-iteration bootstrap 95% CIs), DeLong test P
-values, and per-method sub-tables in `reports/model_<method>/`. The DPH row
-should reproduce the paper values (AUC 0.90 IDH, 0.85 1p/19q, 0.81 WHO,
-0.78 Ki-67). The RF classifiers at `model/weights/rf/*.joblib` were
-produced by the same command with `random_state=42`; loading them yields
-byte-identical `predict_proba` outputs across runs.
-
-### Figure 1A, B — Reference tissue curves
-
-Precomputed summaries at `analysis/data/reference_tissue/*.pkl` (one pickle
-per tissue with keys `median_curve, q1_curve, q3_curve, peak_height,
-percentage_recovery, n_voxels`). Plot inline:
-
-```python
-import pickle, matplotlib.pyplot as plt
-for tissue in ('artery', 'gm', 'wm', 'csf', 'cp'):
-    d = pickle.load(open(f'analysis/data/reference_tissue/{tissue}_curves.pkl', 'rb'))
-    plt.plot(d['median_curve'], label=tissue)
-    plt.fill_between(range(60), d['q1_curve'], d['q3_curve'], alpha=0.2)
-plt.legend(); plt.savefig('fig1AB.png')
-```
-
-### Figure 1C, D — Habitat curves and bar plots
-
-Habitat quantile curves at `analysis/data/habitat_curves/dVAE_quantiles.pkl`
-(dict keyed by habitat `1..8`; each entry is `[q1_curve, median_curve,
-q3_curve]`, each a 60-point array). Same three-line plotting pattern.
-
-### Figure 2A — PHR bar plots stratified by subgroup
-
-Reads `summary_statistics.csv` (medians and IQRs).
-
-### Figure 2B — SHAP summary plots
-
-```python
-import joblib, shap, pandas as pd, matplotlib.pyplot as plt
-rf = joblib.load('model/weights/rf/dVAE_who_grade_random_forest.joblib')
-df = pd.read_csv('<label_with_quantization.csv>')
-X = df[[f'dVAE_ratio_{i}' for i in range(1, 9)]].values
-explainer = shap.TreeExplainer(rf)
-shap.summary_plot(explainer.shap_values(X), X,
-                  feature_names=[f'H{i}' for i in range(1, 9)], show=False)
-plt.savefig('fig2B_who.png')
-```
-
-### Reproducing habitat NIfTI maps from raw DSC volumes
+### Step 1 — Voxel-wise habitat map
 
 ```bash
 cd model
 python encode.py --dataroot <path/to/patient/root> \
-       --resume weights/dvae_checkpoint.ckpt -c configs/vqgan_sep.yaml
+       --resume weights/dvae_checkpoint.ckpt \
+       -c configs/vqgan_sep.yaml
 ```
 
-writes `dsc_clusters/dVAE_quantization.nii.gz` per patient. Feeding these
-back into `analysis/compute_ratios.py` regenerates the patient-level CSV
-used above.
+Writes `dsc_clusters/dVAE_quantization.nii.gz` in the patient directory. Voxels inside the tumor mask carry integer labels 1–8 corresponding to the eight Deep Pattern Habitats; voxels outside the mask are zero.
+
+### Step 2 — PHR + classification probabilities
+
+```bash
+cd analysis
+python predict.py \
+       --habitat <path/to/dVAE_quantization.nii.gz> \
+       --mask    <path/to/tumor_mask.nii.gz>
+```
+
+Prints the 8-element PHR (`H1..H8`) and, for each of the four classifiers, the class probabilities. Example output:
+
+```
+Perfusion Habitat Ratio (H1..H8):
+  H1: 0.0210
+  H2: 0.0483
+  H3: 0.0972
+  H4: 0.1204
+  H5: 0.1855
+  H6: 0.1620
+  H7: 0.3410
+  H8: 0.0246
+
+Classification probabilities:
+  who_grade: P(2)=0.021, P(3)=0.132, P(4)=0.847
+  idh:       P(0)=0.912, P(1)=0.088
+  1p19q:     P(0)=0.831, P(1)=0.169
+  ki_67:     P(0)=0.213, P(1)=0.787
+```
+
+Class labels: `who_grade` ∈ {2, 3, 4}; `idh` and `1p19q` codes are 0 = wildtype / non-codeleted, 1 = mutant / codeleted; `ki_67` codes are 0 = ≤10 %, 1 = > 10 %.
 
 ## 4. Data availability
 
-Individual patient MRI and clinical data are not distributed with this
-repository because of institutional review board restrictions. Aggregate
-subgroup statistics that reproduce Table 2 are provided at
-`analysis/data/summary_statistics.csv`. See the manuscript's Resource
-Availability section for the full statement.
+Individual patient MRI and clinical data used to train the deposited models are not distributed with this repository because of institutional review board restrictions and patient privacy regulations. De-identified data may be shared upon reasonable request as described in the manuscript's Resource Availability section.
 
 ## 5. License
 
