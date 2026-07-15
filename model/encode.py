@@ -1,9 +1,8 @@
-import argparse, os, sys, glob, math, time
+import argparse, os
 import ants
 import torch
 import numpy as np
 from omegaconf import OmegaConf
-from PIL import Image
 from project_utils import instantiate_from_config
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -61,13 +60,14 @@ def run_conditional(model, dloader, device, batch_size=1):
         results = torch.cat(results, dim=0).squeeze().to(torch.float32).cpu()
         decimal_values = results @ torch.tensor([4, 2, 1], dtype=results.dtype, device=results.device) + 1
 
-        # 2. Peak Height 기준 순서 정의 (H1이 1등, H2가 2등 ...)
-        # 이미지 분석 결과 기반 순위: H1, H2, H4, H3, H8, H6, H5, H7
-        # 이 리스트의 인덱스 0은 decimal_value 1(H1)이 가질 새로운 '순위' 혹은 '값'을 의미합니다.
-        rank_mapping = torch.tensor([1, 2, 4, 3, 7, 6, 8, 5]) 
+        # Apply the peak-height-based permutation so that the exported habitat
+        # labels are biologically ordered: index 0 is the label assigned to
+        # decimal_value 1, index 1 to decimal_value 2, and so on.
+        # Ordering: raw codebook indices 1..8 -> H1, H2, H4, H3, H7, H6, H8, H5
+        # so that H1 has the highest peak height and H8 the lowest.
+        rank_mapping = torch.tensor([1, 2, 4, 3, 7, 6, 8, 5])
 
-        # 3. Remapping 적용
-        # decimal_values가 1~8이므로, 인덱스로 쓰기 위해 1을 빼고 정수형으로 변환합니다.
+        # decimal_values are 1..8; subtract 1 to use them as list indices.
         remapped_values = rank_mapping[(decimal_values.long() - 1)]
 
         num_unique = len(np.unique(decimal_values))
@@ -77,33 +77,15 @@ def run_conditional(model, dloader, device, batch_size=1):
         quantized_dsc = torch.zeros(tumor_mask.shape, dtype=torch.float32, device=remapped_values.device)
         quantized_dsc[tumor_mask] = remapped_values.to(torch.float32)
         quantized_dsc = quantized_dsc.cpu().numpy()
-        
+
         save_dir = os.path.join(patient_dir, 'dsc_clusters')
         os.makedirs(save_dir, exist_ok=True)
-        
+
         tumor_mask_path = os.path.join(patient_dir, 'tumor_mask.nii.gz')
         tumor_mask_nifti = ants.image_read(tumor_mask_path)
-        
+
         quantized_dsc_nifti = tumor_mask_nifti.new_image_like(quantized_dsc)
         ants.image_write(quantized_dsc_nifti, os.path.join(save_dir, f'dVAE_quantization.nii.gz'))
-
-
-        # num_unique = len(np.unique(decimal_values))
-        # if num_unique > 8:
-        #     print(f"{patient_dir} Unique values: {num_unique}")
-
-        # quantized_dsc = torch.zeros(tumor_mask.shape, dtype=torch.float32, device=decimal_values.device)
-        # quantized_dsc[tumor_mask] = decimal_values.to(torch.float32)
-        # quantized_dsc = quantized_dsc.cpu().numpy()
-        
-        # save_dir = os.path.join(patient_dir, 'dsc_clusters')
-        # os.makedirs(save_dir, exist_ok=True)
-        
-        # tumor_mask_path = os.path.join(patient_dir, 'tumor_mask.nii.gz')
-        # tumor_mask_nifti = ants.image_read(tumor_mask_path)
-        
-        # quantized_dsc_nifti = tumor_mask_nifti.new_image_like(quantized_dsc)
-        # ants.image_write(quantized_dsc_nifti, os.path.join(save_dir, f'dVAE_quantization.nii.gz'))
         
 
 def get_parser():
