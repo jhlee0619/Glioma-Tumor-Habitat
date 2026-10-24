@@ -3,7 +3,7 @@
 [![DOI](https://zenodo.org/badge/891887348.svg)](https://doi.org/10.5281/zenodo.21350691)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Trained models and inference pipeline accompanying the manuscript **"Perfusion-based Habitat Analysis for Visualization and Quantification of Hemodynamic Heterogeneity in Diffuse Glioma"** (submitted to Cell Reports Medicine).
+Trained models and inference pipeline accompanying the manuscript **"Perfusion-based Habitat Analysis for Visualization and Quantification of Hemodynamic Heterogeneity in Diffuse Glioma"**
 
 The materials here let a user apply the trained discrete variational autoencoder (dVAE) and the four Random Forest classifiers to their own DSC perfusion MRI, producing a voxel-wise habitat map, an 8-element Perfusion Habitat Ratio (PHR) vector, and probability outputs for WHO grade, IDH mutation, 1p/19q codeletion, and Ki-67 index.
 
